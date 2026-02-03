@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Valentine</title>
+
+  <style>
+    :root{
+      --ink:#3b2a33;
+    }
+
+    /* 1) Put your provided image in the SAME folder as this file
+          and name it: bg.png
+          (or change the URL below to your filename)
+    */
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--ink);
+      background: #f6c2d6 url("bg.png") center / cover no-repeat fixed;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+    }
+
+    /* This is the “click area” where Yes/No sit (inside the card area of your bg) */
+    .arena{
+      width:min(560px, 92vw);
+      height:min(260px, 48vh);
+      position:relative;
+
+      /* Position the arena roughly where the empty card area is in your bg image */
+      /* Tweak these to match perfectly on your screen */
+      transform: translateY(120px);
+
+      /* Optional: uncomment to visualize arena while aligning */
+      /* outline: 2px dashed rgba(255,255,255,0.6); */
+    }
+
+    .btn{
+      appearance:none;
+      border:0;
+      border-radius:18px;
+      padding:14px 18px;
+      font-weight:800;
+      font-size:18px;
+      cursor:pointer;
+      user-select:none;
+      background: rgba(255,255,255,0.85);
+      color: #3b2a33;
+      border: 1px solid rgba(233,115,150,0.28);
+      box-shadow: 0 14px 26px rgba(59,42,51,0.14);
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+      white-space:nowrap;
+    }
+    .btn:hover{
+      transform: translateY(-2px);
+      box-shadow: 0 18px 34px rgba(59,42,51,0.18);
+      background: rgba(255,255,255,0.92);
+    }
+    .btn:active{ transform: translateY(0) scale(0.99); }
+
+    #yesBtn{
+      position:absolute;
+      left: 40px;
+      top: 140px;
+      min-width: 150px;
+    }
+
+    #noBtn{
+      position:absolute;
+      left: 320px; /* initial; JS will clamp */
+      top: 140px;
+      min-width: 150px;
+      will-change: left, top;
+      touch-action:none;
+    }
+
+    /* tiny success popup */
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:28px;
+      transform:translateX(-50%);
+      padding:14px 18px;
+      border-radius:16px;
+      background: rgba(255,255,255,0.85);
+      border: 1px solid rgba(233,115,150,0.25);
+      box-shadow: 0 18px 40px rgba(59,42,51,0.16);
+      display:none;
+      font-weight:800;
+    }
+    .toast.show{ display:block; }
+  </style>
+</head>
+
+<body>
+  <div class="arena" id="arena">
+    <button class="btn" id="yesBtn">Yes 💖</button>
+    <button class="btn" id="noBtn">No 😭</button>
+  </div>
+
+  <div class="toast" id="toast">YAYYY 💖💖💖</div>
+
+  <script>
+    const arena = document.getElementById("arena");
+    const noBtn  = document.getElementById("noBtn");
+    const yesBtn = document.getElementById("yesBtn");
+    const toast  = document.getElementById("toast");
+
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    function placeNo(x, y){
+      const rect = arena.getBoundingClientRect();
+      const bw = noBtn.offsetWidth;
+      const bh = noBtn.offsetHeight;
+      const pad = 10;
+
+      const minX = pad;
+      const maxX = rect.width  - bw - pad;
+      const minY = pad;
+      const maxY = rect.height - bh - pad;
+
+      noBtn.style.left = `${clamp(x, minX, maxX)}px`;
+      noBtn.style.top  = `${clamp(y, minY, maxY)}px`;
+    }
+
+    // Start "No" in a valid spot
+    function init(){
+      const rect = arena.getBoundingClientRect();
+      placeNo(Math.min(320, rect.width - noBtn.offsetWidth - 10), 140);
+    }
+    window.addEventListener("load", init);
+
+    function fleeFrom(px, py){
+      const rect = arena.getBoundingClientRect();
+      const btnRect = noBtn.getBoundingClientRect();
+
+      // button center (relative to arena)
+      const bx = (btnRect.left - rect.left) + btnRect.width/2;
+      const by = (btnRect.top  - rect.top ) + btnRect.height/2;
+
+      let dx = bx - px;
+      let dy = by - py;
+
+      // if pointer exactly on center, randomize
+      let len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+
+      const jump = 160; // how far it runs each time
+      const tx = (bx + dx * jump) - noBtn.offsetWidth/2;
+      const ty = (by + dy * jump) - noBtn.offsetHeight/2;
+
+      placeNo(tx, ty);
+    }
+
+    function onMove(e){
+      const rect = arena.getBoundingClientRect();
+      const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+      const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+      if (clientX == null || clientY == null) return;
+
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+
+      const btnRect = noBtn.getBoundingClientRect();
+      const bx = (btnRect.left - rect.left) + btnRect.width/2;
+      const by = (btnRect.top  - rect.top ) + btnRect.height/2;
+
+      const dist = Math.hypot(px - bx, py - by);
+      const threshold = 120;
+
+      if (dist < threshold) fleeFrom(px, py);
+    }
+
+    // Desktop + mobile
+    arena.addEventListener("mousemove", onMove);
+    arena.addEventListener("touchstart", onMove, { passive:true });
+    arena.addEventListener("touchmove", onMove, { passive:true });
+
+    // Make "No" extra annoying if clicked
+    noBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = arena.getBoundingClientRect();
+      const rx = Math.random() * (rect.width  - noBtn.offsetWidth  - 20) + 10;
+      const ry = Math.random() * (rect.height - noBtn.offsetHeight - 20) + 10;
+      placeNo(rx, ry);
+    });
+
+    // Yes works
+    yesBtn.addEventListener("click", () => {
+      toast.classList.add("show");
+      // Optional: redirect
+      // window.location.href = "yes.html";
+    });
+
+    // Keep No inside arena on resize
+    window.addEventListener("resize", () => {
+      placeNo(parseFloat(noBtn.style.left || "0"), parseFloat(noBtn.style.top || "0"));
+    });
+  </script>
+</body>
+</html>
