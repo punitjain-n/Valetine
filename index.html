@@ -8,35 +8,57 @@
   <style>
     :root{
       --ink:#3b2a33;
+
+      /* TWEAK THESE 3 IF YOU WANT PERFECT ALIGNMENT */
+      --gif-top: 15vh;              /* move GIF up/down */
+      --gif-left: 50vw;             /* keep 50vw for center; change if needed */
+      --gif-size: min(220px, 34vw); /* GIF size */
     }
 
-    /* 1) Put your provided image in the SAME folder as this file
-          and name it: bg.png
-          (or change the URL below to your filename)
-    */
     body{
       margin:0;
       min-height:100vh;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       color:var(--ink);
+
+      /* Put bg.png in the repo root */
       background: #f6c2d6 url("bg.png") center / cover no-repeat fixed;
+
       display:grid;
       place-items:center;
       overflow:hidden;
     }
 
-    /* This is the “click area” where Yes/No sit (inside the card area of your bg) */
+    /* GIF overlay that "replaces" the kitten baked into bg.png */
+    .gif-overlay{
+      position: fixed;
+      top: var(--gif-top);
+      left: var(--gif-left);
+      transform: translate(-50%, 0);
+      width: var(--gif-size);
+      height: var(--gif-size);
+      display:none;                 /* shown after YES */
+      z-index: 20;
+      pointer-events:none;
+      filter: drop-shadow(0 18px 24px rgba(59,42,51,0.18));
+    }
+    .gif-overlay img{
+      width:100%;
+      height:100%;
+      object-fit: contain;
+      display:block;
+      border-radius: 18px;          /* optional */
+    }
+
+    /* Arena = interactive area for buttons */
     .arena{
       width:min(560px, 92vw);
       height:min(260px, 48vh);
       position:relative;
 
-      /* Position the arena roughly where the empty card area is in your bg image */
-      /* Tweak these to match perfectly on your screen */
+      /* Places buttons roughly inside the empty card area of your bg */
       transform: translateY(120px);
-
-      /* Optional: uncomment to visualize arena while aligning */
-      /* outline: 2px dashed rgba(255,255,255,0.6); */
+      z-index: 10;
     }
 
     .btn{
@@ -67,15 +89,17 @@
       left: 40px;
       top: 140px;
       min-width: 150px;
+      z-index: 11;
     }
 
     #noBtn{
       position:absolute;
-      left: 320px; /* initial; JS will clamp */
+      left: 320px;
       top: 140px;
       min-width: 150px;
       will-change: left, top;
       touch-action:none;
+      z-index: 11;
     }
 
     /* tiny success popup */
@@ -91,12 +115,26 @@
       box-shadow: 0 18px 40px rgba(59,42,51,0.16);
       display:none;
       font-weight:800;
+      z-index: 30;
     }
     .toast.show{ display:block; }
+
+    /* Optional: when YES clicked, fade buttons out */
+    .arena.locked #noBtn,
+    .arena.locked #yesBtn{
+      opacity: 0.15;
+      pointer-events: none;
+      transform: none;
+    }
   </style>
 </head>
 
 <body>
+  <!-- Upload your GIF to repo root as yay.gif -->
+  <div class="gif-overlay" id="gifOverlay" aria-hidden="true">
+    <img src="yay.gif" alt="Yay GIF" />
+  </div>
+
   <div class="arena" id="arena">
     <button class="btn" id="yesBtn">Yes 💖</button>
     <button class="btn" id="noBtn">No 😭</button>
@@ -109,6 +147,7 @@
     const noBtn  = document.getElementById("noBtn");
     const yesBtn = document.getElementById("yesBtn");
     const toast  = document.getElementById("toast");
+    const gifOverlay = document.getElementById("gifOverlay");
 
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
@@ -157,6 +196,9 @@
     }
 
     function onMove(e){
+      // If we already accepted YES, don't run anymore
+      if (arena.classList.contains("locked")) return;
+
       const rect = arena.getBoundingClientRect();
       const clientX = e.clientX ?? e.touches?.[0]?.clientX;
       const clientY = e.clientY ?? e.touches?.[0]?.clientY;
@@ -190,11 +232,13 @@
       placeNo(rx, ry);
     });
 
-    // Yes works
+    // YES: show toast + overlay GIF covering the baked-in kitten
     yesBtn.addEventListener("click", () => {
       toast.classList.add("show");
-      // Optional: redirect
-      // window.location.href = "yes.html";
+      gifOverlay.style.display = "block";
+
+      // Optional: disable buttons after YES
+      arena.classList.add("locked");
     });
 
     // Keep No inside arena on resize
