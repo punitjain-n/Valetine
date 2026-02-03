@@ -234,12 +234,20 @@
 
     // YES: show toast + overlay GIF covering the baked-in kitten
     yesBtn.addEventListener("click", () => {
-      toast.classList.add("show");
-      gifOverlay.style.display = "block";
+  toast.classList.add("show");
 
-      // Optional: disable buttons after YES
-      arena.classList.add("locked");
-    });
+  // Show overlay first
+  gifOverlay.style.display = "block";
+
+  // Force the GIF to restart + bypass cache
+  const yayImg = document.getElementById("yayImg");
+  yayImg.src = ""; 
+  yayImg.src = "yay.gif?v=" + Date.now();
+
+  // Optional: disable buttons after YES
+  arena.classList.add("locked");
+});
+
 
     // Keep No inside arena on resize
     window.addEventListener("resize", () => {
