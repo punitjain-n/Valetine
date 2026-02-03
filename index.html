@@ -9,10 +9,10 @@
     :root{
       --ink:#3b2a33;
 
-      /* TWEAK THESE 3 IF YOU WANT PERFECT ALIGNMENT */
-      --gif-top: 15vh;              /* move GIF up/down */
-      --gif-left: 50vw;             /* keep 50vw for center; change if needed */
-      --gif-size: min(220px, 34vw); /* GIF size */
+      /* GIF positioning */
+      --gif-top: 15vh;
+      --gif-left: 50vw;
+      --gif-size: min(220px, 34vw);
     }
 
     body{
@@ -21,12 +21,29 @@
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       color:var(--ink);
 
-      /* Put bg.png in the repo root */
+      /* Desktop BG */
       background: #f6c2d6 url("bg.png") center / cover no-repeat fixed;
 
       display:grid;
       place-items:center;
       overflow:hidden;
+    }
+
+    /* MOBILE BG (upload a 9:16 file as bg_mobile.png) */
+    @media (max-width: 768px){
+      body{
+        background: #f6c2d6 url("bg_mobile.png") center top / cover no-repeat;
+        background-attachment: scroll; /* avoids mobile Safari jank */
+      }
+      .arena{
+        transform: translateY(90px);
+        width: min(520px, 94vw);
+        height: min(240px, 40vh);
+      }
+      :root{
+        --gif-top: 12vh;
+        --gif-size: min(240px, 60vw);
+      }
     }
 
     /* GIF overlay that "replaces" the kitten baked into bg.png */
@@ -37,7 +54,7 @@
       transform: translate(-50%, 0);
       width: var(--gif-size);
       height: var(--gif-size);
-      display:none;                 /* shown after YES */
+      display:none;
       z-index: 20;
       pointer-events:none;
       filter: drop-shadow(0 18px 24px rgba(59,42,51,0.18));
@@ -47,7 +64,7 @@
       height:100%;
       object-fit: contain;
       display:block;
-      border-radius: 18px;          /* optional */
+      border-radius: 18px;
     }
 
     /* Arena = interactive area for buttons */
@@ -100,6 +117,9 @@
       will-change: left, top;
       touch-action:none;
       z-index: 11;
+
+      /* Smooth out the motion (reduces jitter) */
+      transition: left 140ms ease-out, top 140ms ease-out;
     }
 
     /* tiny success popup */
@@ -130,9 +150,9 @@
 </head>
 
 <body>
-  <!-- Upload your GIF to repo root as yay.gif -->
+  <!-- Upload yay.gif to repo root -->
   <div class="gif-overlay" id="gifOverlay" aria-hidden="true">
-    <img src="yay.gif" alt="Yay GIF" />
+    <img id="yayImg" src="" alt="Yay GIF" />
   </div>
 
   <div class="arena" id="arena">
@@ -148,6 +168,7 @@
     const yesBtn = document.getElementById("yesBtn");
     const toast  = document.getElementById("toast");
     const gifOverlay = document.getElementById("gifOverlay");
+    const yayImg = document.getElementById("yayImg");
 
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
@@ -173,54 +194,82 @@
     }
     window.addEventListener("load", init);
 
+    /* -----------------------------
+       Smooth "No" movement (less jitter)
+    ------------------------------ */
+    let rafPending = false;
+    let lastPointer = { x: 0, y: 0 };
+    let lastFleeAt = 0;
+
     function fleeFrom(px, py){
       const rect = arena.getBoundingClientRect();
-      const btnRect = noBtn.getBoundingClientRect();
+      const bw = noBtn.offsetWidth;
+      const bh = noBtn.offsetHeight;
+      const pad = 10;
 
-      // button center (relative to arena)
-      const bx = (btnRect.left - rect.left) + btnRect.width/2;
-      const by = (btnRect.top  - rect.top ) + btnRect.height/2;
+      // Current button center (relative to arena)
+      const currentLeft = parseFloat(noBtn.style.left || "0");
+      const currentTop  = parseFloat(noBtn.style.top  || "0");
+      const bx = currentLeft + bw / 2;
+      const by = currentTop  + bh / 2;
 
+      // Vector away from pointer
       let dx = bx - px;
       let dy = by - py;
-
-      // if pointer exactly on center, randomize
-      let len = Math.hypot(dx, dy) || 1;
+      const len = Math.hypot(dx, dy) || 1;
       dx /= len; dy /= len;
 
-      const jump = 160; // how far it runs each time
-      const tx = (bx + dx * jump) - noBtn.offsetWidth/2;
-      const ty = (by + dy * jump) - noBtn.offsetHeight/2;
+      // Bigger jump + slight randomness feels smoother/less twitchy
+      const jump = 190;
+      const jitter = 35;
 
-      placeNo(tx, ty);
+      const targetX = (bx + dx * jump) - bw/2 + (Math.random()*jitter - jitter/2);
+      const targetY = (by + dy * jump) - bh/2 + (Math.random()*jitter - jitter/2);
+
+      // Clamp inside arena
+      const minX = pad, maxX = rect.width  - bw - pad;
+      const minY = pad, maxY = rect.height - bh - pad;
+
+      noBtn.style.left = `${clamp(targetX, minX, maxX)}px`;
+      noBtn.style.top  = `${clamp(targetY, minY, maxY)}px`;
     }
 
-    function onMove(e){
-      // If we already accepted YES, don't run anymore
+    function processPointer(){
+      rafPending = false;
       if (arena.classList.contains("locked")) return;
 
-      const rect = arena.getBoundingClientRect();
-      const clientX = e.clientX ?? e.touches?.[0]?.clientX;
-      const clientY = e.clientY ?? e.touches?.[0]?.clientY;
-      if (clientX == null || clientY == null) return;
+      const now = Date.now();
+      const cooldown = 140; // ms between moves (major jitter fix)
+      if (now - lastFleeAt < cooldown) return;
 
-      const px = clientX - rect.left;
-      const py = clientY - rect.top;
+      const bw = noBtn.offsetWidth;
+      const bh = noBtn.offsetHeight;
 
-      const btnRect = noBtn.getBoundingClientRect();
-      const bx = (btnRect.left - rect.left) + btnRect.width/2;
-      const by = (btnRect.top  - rect.top ) + btnRect.height/2;
+      const currentLeft = parseFloat(noBtn.style.left || "0");
+      const currentTop  = parseFloat(noBtn.style.top  || "0");
+      const bx = currentLeft + bw/2;
+      const by = currentTop  + bh/2;
 
-      const dist = Math.hypot(px - bx, py - by);
-      const threshold = 120;
+      const dist = Math.hypot(lastPointer.x - bx, lastPointer.y - by);
+      const threshold = 125;
 
-      if (dist < threshold) fleeFrom(px, py);
+      if (dist < threshold){
+        lastFleeAt = now;
+        fleeFrom(lastPointer.x, lastPointer.y);
+      }
     }
 
-    // Desktop + mobile
-    arena.addEventListener("mousemove", onMove);
-    arena.addEventListener("touchstart", onMove, { passive:true });
-    arena.addEventListener("touchmove", onMove, { passive:true });
+    // One unified event for mouse + touch + pen
+    arena.addEventListener("pointermove", (e) => {
+      const rect = arena.getBoundingClientRect();
+      lastPointer.x = e.clientX - rect.left;
+      lastPointer.y = e.clientY - rect.top;
+
+      if (!rafPending){
+        rafPending = true;
+        requestAnimationFrame(processPointer);
+      }
+    });
 
     // Make "No" extra annoying if clicked
     noBtn.addEventListener("click", (e) => {
@@ -232,22 +281,17 @@
       placeNo(rx, ry);
     });
 
-    // YES: show toast + overlay GIF covering the baked-in kitten
+    // YES: show toast + overlay GIF covering the baked-in kitten (force restart)
     yesBtn.addEventListener("click", () => {
-  toast.classList.add("show");
+      toast.classList.add("show");
+      gifOverlay.style.display = "block";
 
-  // Show overlay first
-  gifOverlay.style.display = "block";
+      // Force restart + bypass cache
+      yayImg.src = "";
+      yayImg.src = "yay.gif?v=" + Date.now();
 
-  // Force the GIF to restart + bypass cache
-  const yayImg = document.getElementById("yayImg");
-  yayImg.src = ""; 
-  yayImg.src = "yay.gif?v=" + Date.now();
-
-  // Optional: disable buttons after YES
-  arena.classList.add("locked");
-});
-
+      arena.classList.add("locked");
+    });
 
     // Keep No inside arena on resize
     window.addEventListener("resize", () => {
